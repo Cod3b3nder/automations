@@ -1,52 +1,188 @@
 #Simple network scanner that will exaust all the NMAP tools to display open ports. Select 1 to scan current network or 2 to scan a external one. Make sure you have the network's consent to do so.
 
 
+#!/usr/bin/env python3
+
 import subprocess
 import os
 import time
-from os import system
 import platform
+import sys
+from datetime import datetime
+
+class Colors:
+    HEADER = '\033[95m'
+    BLUE = '\033[94m'
+    CYAN = '\033[96m'
+    GREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    END = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
 
 def clear_screen():
-    if platform.system() == "Windows":
-        os.system('cls')
-    else:
-        os.system('clear')
+    os.system('cls' if platform.system() == "Windows" else 'clear')
 
-def print_header():
-    clear_screen()
-    print("Oox Lab - Network Scanner")
+def print_banner():
+    banner = f"""
+{Colors.CYAN}
+ ██████  ██████  ██   ██     ██       █████  ██████  
+██    ██ ██   ██  ██ ██      ██      ██   ██ ██   ██ 
+██    ██ ██████    ███       ██      ███████ ██████  
+██    ██ ██   ██  ██ ██      ██      ██   ██ ██   ██ 
+ ██████  ██   ██ ██   ██     ███████ ██   ██ ██████  
+{Colors.END}
+{Colors.BOLD}Network Scanner v1.0{Colors.END}
+{Colors.BLUE}[ Created by Oox Lab ]{Colors.END}
+"""
+    print(banner)
+
+def print_status(message, status_type="info"):
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    color = {
+        "info": Colors.BLUE,
+        "success": Colors.GREEN,
+        "warning": Colors.WARNING,
+        "error": Colors.FAIL
+    }.get(status_type, Colors.BLUE)
+    
+    print(f"{Colors.BOLD}[{timestamp}]{Colors.END} {color}{message}{Colors.END}")
+
+def loading_animation(duration):
+    animation = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    end_time = time.time() + duration
+    i = 0
+    while time.time() < end_time:
+        print(f"\r{Colors.CYAN}{animation[i]}{Colors.END} Scanning...", end="")
+        time.sleep(0.1)
+        i = (i + 1) % len(animation)
+    print("\r" + " " * 20 + "\r", end="")
+
+def format_scan_results(output):
+    lines = output.split('\n')
+    formatted = []
+    
+    for line in lines:
+        if "Nmap scan report" in line:
+            formatted.append(f"\n{Colors.GREEN}{line}{Colors.END}")
+        elif "PORT" in line:
+            formatted.append(f"{Colors.CYAN}{line}{Colors.END}")
+        elif "open" in line:
+            formatted.append(f"{Colors.GREEN}{line}{Colors.END}")
+        elif "filtered" in line:
+            formatted.append(f"{Colors.WARNING}{line}{Colors.END}")
+        elif "closed" in line:
+            formatted.append(f"{Colors.FAIL}{line}{Colors.END}")
+        else:
+            formatted.append(line)
+    
+    return '\n'.join(formatted)
+
+def validate_ip(ip):
+    parts = ip.split('.')
+    if len(parts) != 4:
+        return False
+    try:
+        return all(0 <= int(part) <= 255 for part in parts)
+    except ValueError:
+        return False
 
 def scan_local_network():
-    print("Scanning local network...")
-    subprocess.run(['nmap', '-sT', '192.168.1.0/24'])
+    print_status("Initiating local network scan...", "info")
+    try:
+        loading_animation(1)  # Simulate initial processing
+        result = subprocess.run(
+            ['nmap', '-sT', '-F', '192.168.1.0/24'],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode == 0:
+            print_status("Scan completed successfully!", "success")
+            print(format_scan_results(result.stdout))
+        else:
+            print_status("Scan failed!", "error")
+            print(f"{Colors.FAIL}{result.stderr}{Colors.END}")
+    except FileNotFoundError:
+        print_status("Error: nmap is not installed!", "error")
+        print(f"{Colors.WARNING}Please install nmap and try again.{Colors.END}")
 
 def scan_external_ip():
-    ip_address = input("Enter an external IP address: ")
-    print(f"Scanning {ip_address}...")
-    flags = ['-sT', '-sS', '-sU', '-sW', '-sA']
-    for flag in flags:
-        result = subprocess.run(['nmap', flag, ip_address])
-        if result.returncode == 0:
-            print(f"Found open ports with flag {flag}")
-            break
-        else:
-            print(f"Did not find any open ports with flag {flag}")
+    while True:
+        ip_address = input(f"\n{Colors.BOLD}Enter an external IP address:{Colors.END} ")
+        if ip_address.lower() == 'back':
+            return
+        if not validate_ip(ip_address):
+            print_status("Invalid IP address format! Try again or type 'back' to return", "error")
+            continue
+        
+        print_status(f"Scanning {ip_address}...", "info")
+        try:
+            loading_animation(1)  # Simulate initial processing
+            result = subprocess.run(
+                ['nmap', '-sT', '-F', ip_address],
+                capture_output=True,
+                text=True
+            )
+            if result.returncode == 0:
+                print_status("Scan completed successfully!", "success")
+                print(format_scan_results(result.stdout))
+            else:
+                print_status("Scan failed!", "error")
+                print(f"{Colors.FAIL}{result.stderr}{Colors.END}")
+        except FileNotFoundError:
+            print_status("Error: nmap is not installed!", "error")
+            print(f"{Colors.WARNING}Please install nmap and try again.{Colors.END}")
+        break
+
+def check_nmap_installed():
+    try:
+        subprocess.run(['nmap', '-V'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return True
+    except FileNotFoundError:
+        return False
+
+def print_menu():
+    print(f"\n{Colors.BOLD}Available Options:{Colors.END}")
+    print(f"{Colors.BLUE}1.{Colors.END} Scan local network")
+    print(f"{Colors.BLUE}2.{Colors.END} Scan external IP")
+    print(f"{Colors.BLUE}3.{Colors.END} Exit")
+    return input(f"\n{Colors.BOLD}Select an option (1-3):{Colors.END} ")
 
 def main():
-    print_header()
-    while True:
-        print("\nOptions:")
-        print("1. Scan my own network")
-        print("2. Scan an external IP address")
-        choice = input("Enter your selection: ")
-        if choice == "1":
-            scan_local_network()
-        elif choice == "2":
-            scan_external_ip()
-        else:
-            print("Invalid selection. Please choose again.")
-        time.sleep(3)
+    try:
+        while True:
+            clear_screen()
+            print_banner()
+            
+            if not check_nmap_installed():
+                print_status("nmap is not installed!", "error")
+                print(f"{Colors.WARNING}Please install nmap and try again.{Colors.END}")
+                input("\nPress Enter to exit...")
+                sys.exit(1)
+            
+            choice = print_menu()
+            
+            if choice == "1":
+                scan_local_network()
+                input(f"\n{Colors.BOLD}Press Enter to continue...{Colors.END}")
+            elif choice == "2":
+                scan_external_ip()
+                input(f"\n{Colors.BOLD}Press Enter to continue...{Colors.END}")
+            elif choice == "3":
+                clear_screen()
+                print_banner()
+                print_status("Thank you for using Oox Lab Network Scanner!", "success")
+                print(f"\n{Colors.BOLD}Stay curious and keep hacking. Ethically! 🔒{Colors.END}\n")
+                sys.exit(0)
+            else:
+                print_status("Invalid option! Please try again.", "warning")
+                time.sleep(1)
+
+    except KeyboardInterrupt:
+        print("\n")
+        print_status("Scanner terminated by user.", "warning")
+        sys.exit(0)
 
 if __name__ == "__main__":
     main()
