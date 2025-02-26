@@ -1,0 +1,52 @@
+#Simple network scanner that will exaust all the NMAP tools to display open ports. Select 1 to scan current network or 2 to scan a external one. Make sure you have the network's consent to do so.
+
+
+import subprocess
+import os
+import time
+from os import system
+import platform
+
+def clear_screen():
+    if platform.system() == "Windows":
+        os.system('cls')
+    else:
+        os.system('clear')
+
+def print_header():
+    clear_screen()
+    print("Oox Lab - Network Scanner")
+
+def scan_local_network():
+    print("Scanning local network...")
+    subprocess.run(['nmap', '-sT', '192.168.1.0/24'])
+
+def scan_external_ip():
+    ip_address = input("Enter an external IP address: ")
+    print(f"Scanning {ip_address}...")
+    flags = ['-sT', '-sS', '-sU', '-sW', '-sA']
+    for flag in flags:
+        result = subprocess.run(['nmap', flag, ip_address])
+        if result.returncode == 0:
+            print(f"Found open ports with flag {flag}")
+            break
+        else:
+            print(f"Did not find any open ports with flag {flag}")
+
+def main():
+    print_header()
+    while True:
+        print("\nOptions:")
+        print("1. Scan my own network")
+        print("2. Scan an external IP address")
+        choice = input("Enter your selection: ")
+        if choice == "1":
+            scan_local_network()
+        elif choice == "2":
+            scan_external_ip()
+        else:
+            print("Invalid selection. Please choose again.")
+        time.sleep(3)
+
+if __name__ == "__main__":
+    main()
